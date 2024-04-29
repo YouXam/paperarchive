@@ -108,7 +108,7 @@ fn backup(matches: &ArgMatches) -> Result<(), Error> {
         .map(|_| backup.next_shard().unwrap())
         .map(|s| (s.id(), s.encrypt().unwrap()))
         .collect::<Vec<_>>();
-
+    
     main_document
         .to_pdf()?
         .save(&mut BufWriter::new(File::create(format!(
@@ -161,9 +161,12 @@ fn read_multibase_qr<S: AsRef<str>, T: FromWire>(prompt: S) -> Result<T, Error> 
     let prompt = prompt.as_ref();
     let mut joiner = qr::Joiner::new();
     while !joiner.complete() {
+        let complete = joiner.completed();
         let part: qr::Part = read_multibase(format!(
-            "{} ({} codes remaining)",
+            "{} ({} code{} completed, {} codes remaining)",
             prompt,
+            complete,
+            if complete == 1 { "" } else { "s" },
             match joiner.remaining() {
                 None => "unknown number of".to_string(),
                 Some(n) => n.to_string(),

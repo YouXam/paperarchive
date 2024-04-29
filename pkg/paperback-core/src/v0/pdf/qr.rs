@@ -179,6 +179,10 @@ impl Joiner {
             .map(|_| self.parts.iter().filter(|v| v.is_none()).count())
     }
 
+    pub fn completed(&self) -> usize {
+        self.parts.iter().filter(|v| v.is_some()).count()
+    }
+
     pub fn complete(&self) -> bool {
         self.remaining() == Some(0)
     }

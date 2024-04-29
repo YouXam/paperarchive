@@ -298,216 +298,271 @@ impl ToPdf for MainDocument {
         let monospace_font = doc.add_external_font(FONT_B612MONO)?;
         let text_font = doc.add_external_font(FONT_ROBOTOSLAB)?;
 
-        let current_page = doc.get_page(page1);
-        let current_layer = current_page.get_layer(layer1);
+        let mut data_qr_refs = data_qrs.into_iter().peekable();
 
-        let mut current_y = A4_MARGIN + Pt(10.0).into();
+        let mut page = page1;
+        let mut layer = layer1;
+        let mut page_number = 1;
 
-        // Header.
-        current_layer.begin_text_section();
-        {
-            current_layer.set_font(&monospace_font, 10.0);
-            current_layer.set_word_spacing(1.2);
-            current_layer.set_character_spacing(1.0);
+        loop {
+            let current_page = doc.get_page(page);
+            let current_layer = current_page.get_layer(layer);
 
-            current_layer.set_text_cursor(A4_MARGIN, A4_HEIGHT - current_y);
+            let mut current_y = A4_MARGIN + Pt(10.0).into();
 
-            // "Document".
-            current_layer.set_font(&text_font, 10.0);
-            current_layer.set_fill_color(colours::GREY);
-            current_layer.write_text("Document", &text_font);
-            current_layer.set_fill_color(colours::BLACK);
-            current_layer.set_line_height(20.0 + 2.0);
-            current_layer.add_line_break();
-            // <document id>
-            current_layer.set_font(&monospace_font, 20.0);
-            current_layer.set_fill_color(colours::MAIN_DOCUMENT_TRIM);
-            current_layer.write_text(self.id(), &monospace_font);
-            current_layer.set_fill_color(colours::BLACK);
-            current_layer.set_line_height(10.0 + 2.0);
+            // Header.
+            current_layer.begin_text_section();
+            {
+                current_layer.set_font(&monospace_font, 10.0);
+                current_layer.set_word_spacing(1.2);
+                current_layer.set_character_spacing(1.0);
 
-            current_layer.add_line_break();
-            current_layer.add_line_break();
+                current_layer.set_text_cursor(A4_MARGIN, A4_HEIGHT - current_y);
 
-            // Details.
-            current_layer.set_font(&text_font, 10.0);
-            current_layer.set_line_height(10.0 + 2.0);
-            current_layer.write_text(
-                format!(
-                    "This is the main document of a paperback backup. When combined with {} unique",
-                    self.quorum_size()
-                ),
-                &text_font,
-            );
-            current_layer.add_line_break();
-            current_layer.write_text(
-                "key shards, this document can be recovered. In order to recover this document,",
-                &text_font,
-            );
-            current_layer.add_line_break();
-            current_layer.write_text(
-                "download the latest version of paperback from cyphar.com/paperback.",
-                &text_font,
-            );
-        }
-        current_layer.end_text_section();
-        current_layer.begin_text_section();
-        {
-            // Header. TODO: Right-align this text.
-            current_layer.set_text_cursor(
-                A4_WIDTH - (A4_MARGIN + (Pt(15.0) * 12.0).into()),
-                A4_HEIGHT - (current_y + Pt(10.0).into()),
-            );
-            current_layer.set_font(&text_font, 20.0);
-            current_layer.set_fill_color(colours::MAIN_DOCUMENT_TRIM);
-            current_layer.write_text("Main Document", &text_font);
-            current_layer.set_fill_color(colours::BLACK);
-            current_layer.set_line_height(10.0 + 2.0);
-            current_layer.add_line_break();
+                // "Document".
+                current_layer.set_font(&text_font, 10.0);
+                current_layer.set_fill_color(colours::GREY);
+                current_layer.write_text("Document", &text_font);
+                current_layer.set_fill_color(colours::BLACK);
+                current_layer.set_line_height(20.0 + 2.0);
+                current_layer.add_line_break();
+                // <document id>
+                current_layer.set_font(&monospace_font, 20.0);
+                current_layer.set_fill_color(colours::MAIN_DOCUMENT_TRIM);
+                current_layer.write_text(self.id(), &monospace_font);
+                current_layer.set_fill_color(colours::BLACK);
+                current_layer.set_line_height(10.0 + 2.0);
+                
 
-            current_layer.set_font(&monospace_font, 10.0);
-            current_layer.set_fill_color(colours::GREY);
-            current_layer.write_text("paperback-v0", &monospace_font);
-            current_layer.set_fill_color(colours::BLACK);
-            current_layer.set_line_height(10.0 + 2.0);
-        }
-        current_layer.end_text_section();
-        current_y += (Pt(22.0) + Pt(12.0) * 4.0).into();
+                current_layer.add_line_break();
+                current_layer.add_line_break();
 
-        current_y += banner(
-            &current_layer,
-            A4_HEIGHT - current_y,
-            (A4_WIDTH, A4_MARGIN, Mm(3.0)),
-            Text {
-                inner: "① Document",
-                colour: colours::WHITE,
-                font: &text_font,
-                font_size: Pt(10.0),
-            },
-            Some(Text {
-                inner: "Data section, encrypted with secret key stored in the key shards.",
-                colour: colours::WHITE,
-                font: &text_font,
-                font_size: Pt(8.0),
-            }),
-            colours::MAIN_DOCUMENT_TRIM,
-        ) + Mm(2.0);
+                // Details.
+                current_layer.set_font(&text_font, 10.0);
+                current_layer.set_line_height(10.0 + 2.0);
+                current_layer.write_text(
+                    format!(
+                        "This is the main document of a paperback backup. When combined with {} unique",
+                        self.quorum_size()
+                    ),
+                    &text_font,
+                );
+                current_layer.add_line_break();
+                current_layer.write_text(
+                    "key shards, this document can be recovered. In order to recover this document,",
+                    &text_font,
+                );
+                current_layer.add_line_break();
+                current_layer.write_text(
+                    "download the latest version of paperback from cyphar.com/paperback.",
+                    &text_font,
+                );
+            }
+            current_layer.end_text_section();
+            // Page.
+            current_layer.begin_text_section();
+            {
+                current_layer.set_font(&monospace_font, 10.0);
+                current_layer.set_word_spacing(1.2);
+                current_layer.set_character_spacing(1.0);
 
-        // TODO: Get rid of this once we have nice QR code scanning.
-        println!("Main Document:");
-        data_qr_datas
-            .iter()
-            .for_each(|code| println!("{}", multibase::encode(multibase::Base::Base10, code)));
+                current_layer.set_text_cursor(
+                    A4_MARGIN + (Pt(15.0) * 10.0).into(),
+                    A4_HEIGHT - current_y
+                );
 
-        let mut current_x = A4_MARGIN;
-        let mut data_qr_refs = data_qrs
-            .into_iter()
-            .map(|code| code.into_xobject(&current_layer));
-        for _ in 0..9 {
-            let target_size = (A4_WIDTH - A4_MARGIN * 2.0) / 3.0;
-            match data_qr_refs.next() {
-                Some(svg) => {
-                    let (width, height) = (svg.width, svg.height);
-                    svg.add_to_layer(
-                        &current_layer,
-                        SvgTransform {
-                            translate_x: Some(current_x.into()),
-                            translate_y: Some((A4_HEIGHT - (current_y + target_size)).into()),
-                            dpi: Some(SVG_DPI),
-                            scale_x: Some(target_size / Mm::from(width.into_pt(SVG_DPI))),
-                            scale_y: Some(target_size / Mm::from(height.into_pt(SVG_DPI))),
-                            ..Default::default()
-                        },
-                    );
+                // "Page"
+                current_layer.set_font(&text_font, 10.0);
+                current_layer.set_fill_color(colours::GREY);
+                current_layer.write_text("Page", &text_font);
+                current_layer.set_fill_color(colours::BLACK);
+                current_layer.set_line_height(20.0 + 2.0);
+                current_layer.add_line_break();
+                // <page number>
+                current_layer.set_font(&monospace_font, 20.0);
+                current_layer.set_fill_color(colours::MAIN_DOCUMENT_TRIM);
+                current_layer.write_text(&page_number.to_string(), &monospace_font);
+                current_layer.set_fill_color(colours::BLACK);
+                current_layer.set_line_height(10.0 + 2.0);
+            }
+            current_layer.end_text_section();
+            current_layer.begin_text_section();
+            {
+                // Header. TODO: Right-align this text.
+                current_layer.set_text_cursor(
+                    A4_WIDTH - (A4_MARGIN + (Pt(15.0) * 12.0).into()),
+                    A4_HEIGHT - (current_y + Pt(10.0).into()),
+                );
+                current_layer.set_font(&text_font, 20.0);
+                current_layer.set_fill_color(colours::MAIN_DOCUMENT_TRIM);
+                current_layer.write_text("Main Document", &text_font);
+                current_layer.set_fill_color(colours::BLACK);
+                current_layer.set_line_height(10.0 + 2.0);
+                current_layer.add_line_break();
+
+                current_layer.set_font(&monospace_font, 10.0);
+                current_layer.set_fill_color(colours::GREY);
+                current_layer.write_text("paperback-v0", &monospace_font);
+                current_layer.set_fill_color(colours::BLACK);
+                current_layer.set_line_height(10.0 + 2.0);
+            }
+            current_layer.end_text_section();
+            current_y += (Pt(22.0) + Pt(12.0) * 4.0).into();
+
+            current_y += banner(
+                &current_layer,
+                A4_HEIGHT - current_y,
+                (A4_WIDTH, A4_MARGIN, Mm(3.0)),
+                Text {
+                    inner: "① Document",
+                    colour: colours::WHITE,
+                    font: &text_font,
+                    font_size: Pt(10.0),
+                },
+                Some(Text {
+                    inner: "Data section, encrypted with secret key stored in the key shards.",
+                    colour: colours::WHITE,
+                    font: &text_font,
+                    font_size: Pt(8.0),
+                }),
+                colours::MAIN_DOCUMENT_TRIM,
+            ) + Mm(2.0);
+
+            // TODO: Get rid of this once we have nice QR code scanning.
+            println!("Main Document:");
+            data_qr_datas
+                .iter()
+                .for_each(|code| println!("{}", multibase::encode(multibase::Base::Base10, code)));
+
+            let mut current_x = A4_MARGIN;
+            for i in 0..9 {
+                let target_size = (A4_WIDTH - A4_MARGIN * 2.0) / 3.0;
+                // .map(|code| code.into_xobject(&current_layer));
+                match data_qr_refs.next() {
+                    Some(svg) => {
+                        let (width, height) = (svg.width, svg.height);
+                        svg.add_to_layer(
+                            &current_layer,
+                            SvgTransform {
+                                translate_x: Some(current_x.into()),
+                                translate_y: Some((A4_HEIGHT - (current_y + target_size)).into()),
+                                dpi: Some(SVG_DPI),
+                                scale_x: Some(target_size / Mm::from(width.into_pt(SVG_DPI))),
+                                scale_y: Some(target_size / Mm::from(height.into_pt(SVG_DPI))),
+                                ..Default::default()
+                            },
+                        );
+
+                        let serial_number = format!("No.{}", (page_number - 1) * 9 + i + 1);
+                        current_layer.begin_text_section();
+                        {
+                            current_layer.set_font(&monospace_font, 6.0);
+                            current_layer.set_fill_color(colours::BLACK);
+                            current_layer.set_text_cursor(
+                                current_x + Mm(2.0),
+                                A4_HEIGHT - (current_y + Mm(1.5))
+                            );
+                            current_layer.write_text(&serial_number, &monospace_font);
+                        }
+                        current_layer.end_text_section();
+                    }
+                    None => {
+                        // Dashed line box where the QR code would go.
+                        let polygon = Polygon {
+                            rings: vec![vec![
+                                (
+                                    Point::new(
+                                        current_x + QR_MARGIN / 2.0,
+                                        A4_HEIGHT - (current_y + QR_MARGIN / 2.0),
+                                    ),
+                                    false,
+                                ),
+                                (
+                                    Point::new(
+                                        current_x + target_size - QR_MARGIN / 2.0,
+                                        A4_HEIGHT - (current_y + QR_MARGIN / 2.0),
+                                    ),
+                                    false,
+                                ),
+                                (
+                                    Point::new(
+                                        current_x + target_size - QR_MARGIN / 2.0,
+                                        A4_HEIGHT - (current_y + target_size - QR_MARGIN / 2.0),
+                                    ),
+                                    false,
+                                ),
+                                (
+                                    Point::new(
+                                        current_x + QR_MARGIN / 2.0,
+                                        A4_HEIGHT - (current_y + target_size - QR_MARGIN / 2.0),
+                                    ),
+                                    false,
+                                ),
+                            ]],
+                            mode: PolygonMode::Stroke,
+                            winding_order: WindingOrder::NonZero,
+                        };
+
+                        let dash_pattern = LineDashPattern {
+                            dash_1: Some(6),
+                            gap_1: Some(4),
+                            ..LineDashPattern::default()
+                        };
+
+                        current_layer.set_outline_color(colours::LIGHT_GREY);
+                        current_layer.set_line_dash_pattern(dash_pattern);
+                        current_layer.add_polygon(polygon);
+                    }
+                };
+                current_x += target_size;
+                if current_x + target_size > A4_WIDTH {
+                    current_x = A4_MARGIN;
+                    current_y += target_size;
                 }
-                None => {
-                    // Dashed line box where the QR code would go.
-                    let polygon = Polygon {
-                        rings: vec![vec![
-                            (
-                                Point::new(
-                                    current_x + QR_MARGIN / 2.0,
-                                    A4_HEIGHT - (current_y + QR_MARGIN / 2.0),
-                                ),
-                                false,
-                            ),
-                            (
-                                Point::new(
-                                    current_x + target_size - QR_MARGIN / 2.0,
-                                    A4_HEIGHT - (current_y + QR_MARGIN / 2.0),
-                                ),
-                                false,
-                            ),
-                            (
-                                Point::new(
-                                    current_x + target_size - QR_MARGIN / 2.0,
-                                    A4_HEIGHT - (current_y + target_size - QR_MARGIN / 2.0),
-                                ),
-                                false,
-                            ),
-                            (
-                                Point::new(
-                                    current_x + QR_MARGIN / 2.0,
-                                    A4_HEIGHT - (current_y + target_size - QR_MARGIN / 2.0),
-                                ),
-                                false,
-                            ),
-                        ]],
-                        mode: PolygonMode::Stroke,
-                        winding_order: WindingOrder::NonZero,
-                    };
+            }
 
-                    let dash_pattern = LineDashPattern {
-                        dash_1: Some(6),
-                        gap_1: Some(4),
-                        ..LineDashPattern::default()
-                    };
+            current_y += banner(
+                &current_layer,
+                A4_HEIGHT - current_y,
+                (A4_WIDTH, A4_MARGIN, Mm(3.0)),
+                Text {
+                    inner: "② Checksum",
+                    colour: colours::WHITE,
+                    font: &text_font,
+                    font_size: Pt(10.0),
+                },
+                Some(Text {
+                    inner: "Verifies the document was scanned correctly. The last 8 characters are the document identifier.",
+                    colour: colours::WHITE,
+                    font: &text_font,
+                    font_size: Pt(8.0),
+                }),
+                colours::MAIN_DOCUMENT_TRIM,
+            ) + Mm(2.0);
 
-                    current_layer.set_outline_color(colours::LIGHT_GREY);
-                    current_layer.set_line_dash_pattern(dash_pattern);
-                    current_layer.add_polygon(polygon);
-                }
-            };
-            current_x += target_size;
-            if current_x + target_size > A4_WIDTH {
-                current_x = A4_MARGIN;
-                current_y += target_size;
+            // Document checksum.
+            current_y += qr_with_fallback(
+                &current_layer,
+                A4_HEIGHT - current_y,
+                (A4_WIDTH, A4_MARGIN, 0.18),
+                self.checksum().to_bytes(),
+                &monospace_font,
+                10.0,
+            )?;
+            if data_qr_refs.peek().is_none() {
+
+                break;
+            } else {
+                page_number += 1;
+                let (page_id, layer_id) = doc.add_page(
+                    A4_WIDTH,
+                    A4_HEIGHT,
+                    format!("Page {}, Layer 1", page_number),
+                );
+                page = page_id;
+                layer = layer_id;
             }
         }
-        if data_qr_refs.next().is_some() {
-            return Err(Error::TooManyCodes(
-                "only 9 codes allowed in this version of paperback".to_string(),
-            ));
-        }
-
-        current_y += banner(
-            &current_layer,
-            A4_HEIGHT - current_y,
-            (A4_WIDTH, A4_MARGIN, Mm(3.0)),
-            Text {
-                inner: "② Checksum",
-                colour: colours::WHITE,
-                font: &text_font,
-                font_size: Pt(10.0),
-            },
-            Some(Text {
-                inner: "Verifies the document was scanned correctly. The last 8 characters are the document identifier.",
-                colour: colours::WHITE,
-                font: &text_font,
-                font_size: Pt(8.0),
-            }),
-            colours::MAIN_DOCUMENT_TRIM,
-        ) + Mm(2.0);
-
-        // Document checksum.
-        current_y += qr_with_fallback(
-            &current_layer,
-            A4_HEIGHT - current_y,
-            (A4_WIDTH, A4_MARGIN, 0.18),
-            self.checksum().to_bytes(),
-            &monospace_font,
-            10.0,
-        )?;
 
         doc.check_for_errors()?;
         Ok(doc)
