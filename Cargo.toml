@@ -15,13 +15,16 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 [package]
-name = "paperback"
+name = "paperarchive"
 version = "0.0.0"
-authors = ["Aleksa Sarai <cyphar@cyphar.com>"]
+authors = [
+    "Aleksa Sarai <cyphar@cyphar.com>",
+    "YouXam <youxam@outlook.com>",
+]
 license = "GPL-3.0-or-later"
 
 description = "Paper backup generator suitable for long-term storage."
-repository = "https://github.com/cyphar/paperback"
+repository = "https://github.com/youxam/paperarchive"
 readme = "README.md"
 
 keywords = ["shamir", "secret", "crypto", "paper", "backup"]

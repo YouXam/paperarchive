@@ -1,4 +1,16 @@
-## paperback ##
+# paperarchive
+
+paperarchive is a fork of [paperback](https://github.com/cyphar/paperback) that add multi-page support to the main document. This allows for larger files to be backed up.
+
+## Installation
+
+```sh
+cargo install --git https://github.com/YouXam/paperarchive.git
+```
+
+Following is the original README from paperback.
+
+---
 
 **NOTE**: While paperback is currently fully functional, all of the development
 of "paperpack v0" is experimental and the format of the various data portions
