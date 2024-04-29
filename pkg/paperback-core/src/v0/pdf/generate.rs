@@ -289,7 +289,7 @@ impl ToPdf for MainDocument {
 
         // Construct an A4 PDF.
         let (doc, page1, layer1) = PdfDocument::new(
-            format!("Paperback Main Document {}", self.id()),
+            format!("Paperarchive Main Document {}", self.id()),
             A4_WIDTH,
             A4_HEIGHT,
             "Layer 1",
@@ -342,7 +342,7 @@ impl ToPdf for MainDocument {
                 current_layer.set_line_height(10.0 + 2.0);
                 current_layer.write_text(
                     format!(
-                        "This is the main document of a paperback backup. When combined with {} unique",
+                        "This is the main document of a paperarchive backup. When combined with {} unique",
                         self.quorum_size()
                     ),
                     &text_font,
@@ -354,7 +354,7 @@ impl ToPdf for MainDocument {
                 );
                 current_layer.add_line_break();
                 current_layer.write_text(
-                    "download the latest version of paperback from cyphar.com/paperback.",
+                    "download the latest version of paperarchive from github.com/YouXam/paperarchive.",
                     &text_font,
                 );
             }
@@ -402,7 +402,7 @@ impl ToPdf for MainDocument {
 
                 current_layer.set_font(&monospace_font, 10.0);
                 current_layer.set_fill_color(colours::GREY);
-                current_layer.write_text("paperback-v0", &monospace_font);
+                current_layer.write_text("paperarchive", &monospace_font);
                 current_layer.set_fill_color(colours::BLACK);
                 current_layer.set_line_height(10.0 + 2.0);
             }
@@ -589,7 +589,7 @@ impl ToPdf for (&EncryptedKeyShard, &KeyShardCodewords) {
         // Construct an A5 PDF.
         let (doc, page1, layer1) = PdfDocument::new(
             format!(
-                "Paperback Key Shard {}/{}",
+                "Paperarchive Key Shard {}/{}",
                 decrypted_shard.document_id(),
                 decrypted_shard.id()
             ),
@@ -660,7 +660,7 @@ impl ToPdf for (&EncryptedKeyShard, &KeyShardCodewords) {
 
             current_layer.set_font(&monospace_font, 10.0);
             current_layer.set_fill_color(colours::GREY);
-            current_layer.write_text("paperback-v0", &monospace_font);
+            current_layer.write_text("paperarchive", &monospace_font);
             current_layer.set_fill_color(colours::BLACK);
         }
         current_layer.end_text_section();
@@ -674,9 +674,11 @@ impl ToPdf for (&EncryptedKeyShard, &KeyShardCodewords) {
             // Details.
             current_layer.set_font(&text_font, 10.0);
             current_layer.set_line_height(10.0 + 2.0);
-            current_layer.write_text("This is a key shard of a paperback backup.", &text_font);
+            current_layer.write_text("This is a key shard of a paperarchive backup.", &text_font);
             current_layer.add_line_break();
-            current_layer.write_text("See cyphar.com/paperback for more details.", &text_font);
+            current_layer.set_font(&text_font, 8.0);
+
+            current_layer.write_text("See github.com/YouXam/paperarchive for more details.", &text_font);
         }
         current_layer.end_text_section();
         current_y += Mm(25.0);
