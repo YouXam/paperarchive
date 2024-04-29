@@ -21,8 +21,8 @@ mod raw;
 use std::{
     error::Error as StdError,
     fs::File,
-    io,
-    io::{prelude::*, BufReader, BufWriter},
+    io::{self, prelude::*, BufReader, BufWriter},
+    process::exit,
 };
 
 use anyhow::{anyhow, bail, ensure, Context, Error};
@@ -35,6 +35,8 @@ use paperback::{
     pdf::qr, wire, Backup, EncryptedKeyShard, FromWire, KeyShard, KeyShardCodewords, MainDocument,
     NewShardKind, ToPdf, UntrustedQuorum,
 };
+
+use rustyline;
 
 // paperback-cli backup [--sealed] -n <QUORUM SIZE> -k <SHARDS> INPUT
 fn backup_cli() -> Command {
@@ -129,29 +131,43 @@ fn backup(matches: &ArgMatches) -> Result<(), Error> {
     Ok(())
 }
 
-fn read_multiline<S: AsRef<str>>(prompt: S) -> Result<String, Error> {
-    print!("{}: ", prompt.as_ref());
-    io::stdout().flush()?;
-
-    let buffer_stdin = BufReader::new(io::stdin());
-    Ok(buffer_stdin
-        .lines()
-        .take_while(|s| !matches!(s.as_deref(), Ok("") | Err(_)))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|err| anyhow!("failed to read data: {}", err))?
-        .join("\n"))
+fn read_multiline<S: AsRef<str>>(prompt: S, sep: &str) -> Result<String, Error> {
+    let mut rl = rustyline::DefaultEditor::new()?;
+    let mut first = true;
+    let mut lines = Vec::new();
+    loop {
+        let readline = if first {
+            first = false;
+            rl.readline(format!("{}: ", prompt.as_ref()).as_str())
+        } else {
+            rl.readline("... ")
+        };
+        match readline {
+            Ok(line) => {
+                if line.is_empty() {
+                    break;
+                }
+                lines.push(line);
+            },
+            Err(err) => {
+                println!("Error: {:?}", err);
+                exit(1);
+            }
+        }
+    }
+    Ok(lines.join(sep))
 }
 
 fn read_multibase<S: AsRef<str>, T: FromWire>(prompt: S) -> Result<T, Error> {
     T::from_wire_multibase(
-        wire::multibase_strip(read_multiline(prompt)?)
+        wire::multibase_strip(read_multiline(prompt, "")?)
             .map_err(|err| anyhow!("failed to strip out non-multibase characters: {}", err))?,
     )
     .map_err(|err| anyhow!("failed to parse data: {}", err))
 }
 
 fn read_codewords<S: AsRef<str>>(prompt: S) -> Result<KeyShardCodewords, Error> {
-    Ok(read_multiline(prompt)?
+    Ok(read_multiline(prompt, " ")?
         .split_whitespace()
         .map(|s| s.to_owned())
         .collect::<Vec<_>>())

@@ -851,7 +851,7 @@ impl ToPdf for (&EncryptedKeyShard, &KeyShardCodewords) {
             );
 
             // Codewords.
-            current_layer.set_font(&monospace_font, 10.0);
+            current_layer.set_font(&monospace_font, 8.0);
             current_layer.set_line_height(10.0 + 5.0);
             for (i, codeword) in codewords.iter().enumerate() {
                 let font = if i % 2 == 0 {
