@@ -61,4 +61,4 @@ pub enum Error {
 // Another alternative would be to use the Shift-JIS encoding as a dodgy way to
 // get everything out of the two-byte encoding (if we map every 2-byte sequence
 // to a kanji, it would allow us to have almost zero overhead encoding).
-const QRCODE_MULTIBASE: multibase::Base = multibase::Base::Base64Url;
+const QRCODE_MULTIBASE: multibase::Base = multibase::Base::Base10;
