@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::cmp::min;
+
 use crate::v0::{
     pdf::{Error, QRCODE_MULTIBASE},
     FromWire, ToWire, PAPERBACK_VERSION,
@@ -23,6 +25,11 @@ use crate::v0::{
 
 use qrcode::QrCode;
 use unsigned_varint::encode as varuint_encode;
+
+use multihash_codetable::MultihashDigest;
+
+const CHECKSUM_ALGORITHM: multihash_codetable::Code = multihash_codetable::Code::Blake2b256;
+const CHECKSUM_MULTIBASE: multibase::Base = multibase::Base::Base32Z;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(super) enum PartType {
@@ -49,10 +56,10 @@ impl FromWire for PartType {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-struct PartMeta {
+pub struct PartMeta {
     version: u32,
     data_type: PartType,
-    num_parts: usize,
+    pub num_parts: usize,
 }
 
 impl ToWire for PartMeta {
@@ -108,9 +115,9 @@ impl FromWire for PartMeta {
 
 #[derive(Clone, Debug)]
 pub struct Part {
-    meta: PartMeta,
-    part_idx: usize,
-    data: Vec<u8>,
+    pub data: Vec<u8>,
+    pub meta: PartMeta,
+    pub part_idx: usize,
 }
 
 impl ToWire for Part {
@@ -164,9 +171,64 @@ impl FromWire for Part {
 }
 
 #[derive(Default, Debug)]
+pub struct Page {
+    pub len: usize,
+    start_idx: usize,
+    end_idx: usize,
+    completed_parts: usize,
+    pub page_number: usize,
+    pub parts: [bool; 9]
+}
+
+impl Page {
+    fn new(page_number: usize, start_idx: usize, end_idx: usize) -> Self {
+        Self {
+            len: end_idx - start_idx + 1,
+            start_idx,
+            end_idx,
+            completed_parts: 0,
+            page_number,
+            parts: [false; 9],
+        }
+    }
+
+    pub fn remaining(&self) -> usize {
+        self.len - self.completed_parts
+    }
+
+    pub fn complete(&self) -> bool {
+        self.len == self.completed_parts
+    }
+
+    fn add_part(&mut self, part_idx: usize) -> bool {
+        if part_idx < self.start_idx || part_idx > self.end_idx {
+            return false
+        }
+        let idx = part_idx - self.start_idx;
+        if !self.parts[idx] {
+            self.parts[idx] = true;
+            self.completed_parts += 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn remaining_parts(&self) -> Vec<usize> {
+        (0..self.len)
+            .filter(|idx| !self.parts[*idx])
+            .map(|idx| idx + self.start_idx + 1)
+            .collect()
+    }
+
+}
+#[derive(Default, Debug)]
 pub struct Joiner {
     meta: Option<PartMeta>,
     parts: Vec<Option<Part>>,
+    pages: Vec<Page>,
+    page_number: usize,
+    completed_pages: usize,
 }
 
 impl Joiner {
@@ -187,7 +249,7 @@ impl Joiner {
         self.remaining() == Some(0)
     }
 
-    pub fn add_part(&mut self, part: Part) -> Result<&mut Self, Error> {
+    pub fn add_part(&mut self, part: Part) -> Result<&Page, Error> {
         if let Some(meta) = self.meta {
             if meta != part.meta || part.part_idx >= meta.num_parts {
                 return Err(Error::MismatchedQrCode);
@@ -200,18 +262,29 @@ impl Joiner {
         } else {
             self.meta = Some(part.meta);
             self.parts = vec![None; part.meta.num_parts];
+
+            self.page_number = (part.meta.num_parts - 1) / 9 + 1;
+            self.pages = (0..self.page_number)
+                .map(|idx| {
+                    let start_idx = idx * 9;
+                    let end_idx = min((idx + 1) * 9 - 1, part.meta.num_parts - 1);
+                    Page::new(idx + 1, start_idx, end_idx)
+                })
+                .collect();
         }
         if part.part_idx >= self.parts.len() {
             return Err(Error::MismatchedQrCode);
         }
         let idx = part.part_idx;
         self.parts[idx] = Some(part);
-        Ok(self)
-    }
 
-    pub fn add_qr_part<B: AsRef<str>>(&mut self, qr_data: B) -> Result<&mut Self, Error> {
-        let part = Part::from_wire_multibase(qr_data.as_ref()).map_err(Error::ParseQrData)?;
-        self.add_part(part)
+        let page_idx = idx / 9;
+        
+        if self.pages[page_idx].add_part(idx) && self.pages[page_idx].complete() {
+            self.completed_pages += 1;
+        }
+
+        Ok(&self.pages[page_idx])
     }
 
     pub fn combine_parts(&self) -> Result<Vec<u8>, Error> {
@@ -228,6 +301,15 @@ impl Joiner {
             bytes.extend_from_slice(&part.data)
         }
         Ok(bytes)
+    }
+
+    pub fn checksum_string(&self, page_number: usize) -> String {
+        let page_idx = page_number - 1;
+        let mut datas = Vec::new();
+        for idx in self.pages[page_idx].start_idx..=self.pages[page_idx].end_idx {
+            datas.extend_from_slice(self.parts[idx].as_ref().unwrap().data.as_slice());
+        }
+        multibase::encode(CHECKSUM_MULTIBASE, CHECKSUM_ALGORITHM.digest(datas.as_ref()).to_bytes())
     }
 }
 

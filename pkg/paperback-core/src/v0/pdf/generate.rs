@@ -24,6 +24,9 @@ use crate::v0::{
 use multibase::Base;
 use printpdf::*;
 use qrcode::render::svg;
+use multihash_codetable::MultihashDigest;
+
+const CHECKSUM_ALGORITHM: multihash_codetable::Code = multihash_codetable::Code::Blake2b256;
 
 pub trait ToPdf {
     fn to_pdf(&self) -> Result<PdfDocumentReference, Error>;
@@ -304,11 +307,20 @@ impl ToPdf for MainDocument {
         let mut layer = layer1;
         let mut page_number = 1;
 
+
+        // // TODO: Get rid of this once we have nice QR code scanning.
+        // println!("Main Document:");
+        // data_qr_datas
+        //     .iter()
+        //     .for_each(|code| println!("{}", multibase::encode(multibase::Base::Base10, code)));
+
         loop {
             let current_page = doc.get_page(page);
             let current_layer = current_page.get_layer(layer);
 
             let mut current_y = A4_MARGIN + Pt(10.0).into();
+
+            let mut current_datas: Vec<u8> = Vec::new();
 
             // Header.
             current_layer.begin_text_section();
@@ -428,16 +440,9 @@ impl ToPdf for MainDocument {
                 colours::MAIN_DOCUMENT_TRIM,
             ) + Mm(2.0);
 
-            // TODO: Get rid of this once we have nice QR code scanning.
-            println!("Main Document:");
-            data_qr_datas
-                .iter()
-                .for_each(|code| println!("{}", multibase::encode(multibase::Base::Base10, code)));
-
             let mut current_x = A4_MARGIN;
             for i in 0..9 {
                 let target_size = (A4_WIDTH - A4_MARGIN * 2.0) / 3.0;
-                // .map(|code| code.into_xobject(&current_layer));
                 match data_qr_refs.next() {
                     Some(svg) => {
                         let (width, height) = (svg.width, svg.height);
@@ -454,6 +459,10 @@ impl ToPdf for MainDocument {
                         );
 
                         let serial_number = format!("No.{}", (page_number - 1) * 9 + i + 1);
+
+
+                        current_datas.extend_from_slice(data_qr_datas[(page_number - 1) * 9 + i][6..].as_ref());
+
                         current_layer.begin_text_section();
                         {
                             current_layer.set_font(&monospace_font, 6.0);
@@ -532,7 +541,7 @@ impl ToPdf for MainDocument {
                     font_size: Pt(10.0),
                 },
                 Some(Text {
-                    inner: "Verifies the document was scanned correctly. The last 8 characters are the document identifier.",
+                    inner: "Verifies the page was scanned correctly.",
                     colour: colours::WHITE,
                     font: &text_font,
                     font_size: Pt(8.0),
@@ -545,12 +554,11 @@ impl ToPdf for MainDocument {
                 &current_layer,
                 A4_HEIGHT - current_y,
                 (A4_WIDTH, A4_MARGIN, 0.18),
-                self.checksum().to_bytes(),
+                CHECKSUM_ALGORITHM.digest(current_datas.as_ref()).to_bytes(),
                 &monospace_font,
                 10.0,
             )?;
             if data_qr_refs.peek().is_none() {
-
                 break;
             } else {
                 page_number += 1;

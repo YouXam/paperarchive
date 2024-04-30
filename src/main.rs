@@ -188,7 +188,24 @@ fn read_multibase_qr<S: AsRef<str>, T: FromWire>(prompt: S) -> Result<T, Error> 
                 Some(n) => n.to_string(),
             }
         ))?;
-        joiner.add_part(part)?;
+        let page = joiner.add_part(part)?;
+        let page_number = page.page_number;
+        if page.complete() {
+            println!("Page {} checksum: {}",
+                page_number,
+                joiner.checksum_string(page_number)
+            );
+        } else {
+            println!("The QR code you just scanned is on page {}. There are {} QR codes left unscanned on this page:",
+                page.page_number, page.remaining());
+            print!("\t");
+            print!("{}", page.remaining_parts()
+                .iter()
+                .map(|id| format!("{}", id))
+                .collect::<Vec<_>>()
+                .join(", "));
+            println!(".");
+        }
     }
     T::from_wire(joiner.combine_parts()?)
         .map_err(|err| anyhow!("parse inner qr code data: {}", err))
@@ -225,11 +242,6 @@ fn recover(matches: &ArgMatches) -> Result<(), Error> {
 
     let main_document: MainDocument = read_multibase_qr("Enter a main document code")?;
     let quorum_size = main_document.quorum_size();
-    // TODO: Ask the user to input the checksum...
-    println!(
-        "Main document checksum: {}",
-        main_document.checksum_string()
-    );
 
     println!("Document ID: {}", main_document.id());
     println!("{} key shards required.", quorum_size);
@@ -470,11 +482,6 @@ fn reprint(matches: &ArgMatches) -> Result<(), Error> {
     {
         "main-document" => {
             main_document = read_multibase_qr("Enter a main document code")?;
-            // TODO: Ask the user to input the checksum...
-            println!(
-                "Main document checksum: {}",
-                main_document.checksum_string()
-            );
 
             let pathname = format!("main-document-{}.pdf", main_document.id());
             (&mut main_document, pathname)
