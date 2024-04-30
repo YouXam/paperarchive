@@ -18,10 +18,10 @@
 
 use std::cmp::min;
 
-use crate::v0::{
+use crate::{latest::Multihash, v0::{
     pdf::{Error, QRCODE_MULTIBASE},
     FromWire, ToWire, PAPERBACK_VERSION,
-};
+}};
 
 use qrcode::QrCode;
 use unsigned_varint::encode as varuint_encode;
@@ -29,6 +29,7 @@ use unsigned_varint::encode as varuint_encode;
 use multihash_codetable::MultihashDigest;
 
 const CHECKSUM_ALGORITHM: multihash_codetable::Code = multihash_codetable::Code::Blake2b256;
+const CHECKSUM_MULTIBASE: multibase::Base = multibase::Base::Base32Z;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(super) enum PartType {
@@ -314,13 +315,17 @@ impl Joiner {
         );
     }
 
-    pub fn checksum(&self, page_number: usize) -> Vec<u8> {
+    pub fn checksum(&self, page_number: usize) -> Multihash {
         let page_idx = page_number - 1;
         let mut datas = Vec::new();
         for idx in self.pages[page_idx].start_idx..=self.pages[page_idx].end_idx {
             datas.extend_from_slice(self.parts[idx].as_ref().unwrap().data.as_slice());
         }
-        CHECKSUM_ALGORITHM.digest(datas.as_ref()).to_bytes()
+        CHECKSUM_ALGORITHM.digest(datas.as_ref())
+    }
+
+    pub fn checksum_string(&self, page_number: usize) -> String {
+        multibase::encode(CHECKSUM_MULTIBASE, self.checksum(page_number).to_bytes())
     }
 }
 

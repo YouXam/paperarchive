@@ -39,7 +39,6 @@ use paperback::{
 
 use rustyline;
 
-const CHECKSUM_MULTIBASE: multibase::Base = multibase::Base::Base32Z;
 
 // paperback-cli backup [--sealed] -n <QUORUM SIZE> -k <SHARDS> INPUT
 fn backup_cli() -> Command {
@@ -197,8 +196,6 @@ fn cmp_checksum<S: AsRef<str>>(prompt: S, checksum: Vec<u8>) -> Result<ChecksumR
             }
         },
         Err(_) => {
-            let checksum_string = multibase::encode(CHECKSUM_MULTIBASE, checksum);
-            println!("\tChecksum: {}", checksum_string);
             Ok(ChecksumResult::Skip)
         }
     }
@@ -222,12 +219,13 @@ fn read_multibase_qr<S: AsRef<str>, T: FromWire>(prompt: S) -> Result<T, Error> 
         let page = joiner.add_part(part)?;
         let page_number = page.page_number;
         if page.complete() {
+            println!("Page {} checksum: {}", page_number, joiner.checksum_string(page_number));
             match cmp_checksum(
                 format!(
                     "Enter the checksum for page {}, leave empty to skip",
                     page_number
                 ),
-                joiner.checksum(page_number)
+                joiner.checksum(page_number).to_bytes()
             )? {
                 ChecksumResult::Mismatch => {
                     println!("Checksum mismatch. Please re-scan page {}.", page_number);
@@ -305,12 +303,32 @@ fn recover(matches: &ArgMatches) -> Result<(), Error> {
             idx + 1,
             quorum_size
         ))?;
-        // TODO: Ask the user to input the checksum...
+
         println!(
             "Key shard {} checksum: {}",
             idx + 1,
             encrypted_shard.checksum_string()
         );
+
+        match cmp_checksum(
+            format!(
+                "Enter the checksum for Key shard {}, leave empty to skip",
+                idx + 1
+            ),
+            encrypted_shard.checksum().to_bytes()
+        )? {
+            ChecksumResult::Mismatch => {
+                println!("Checksum mismatch. Please re-scan key shard {}.", idx + 1);
+                continue;
+            },
+            ChecksumResult::Skip => {
+                println!("Skipping checksum verification for key shard {}.", idx + 1);
+            },
+            ChecksumResult::Match => {
+                println!("Checksum verified for key shard {}.", idx + 1);
+            },
+        }
+
 
         let codewords = read_codewords(format!("Enter key shard {} codewords", idx + 1))?;
         let shard = encrypted_shard
@@ -371,12 +389,31 @@ fn new_shards(new_shard_types: impl IntoIterator<Item = NewShardKind>) -> Result
                 n,
             ),
         })?;
-        // TODO: Ask the user to input the checksum...
+
         println!(
             "Key shard {} checksum: {}",
             idx + 1,
             encrypted_shard.checksum_string()
         );
+
+        match cmp_checksum(
+            format!(
+                "Enter the checksum for Key shard {}, leave empty to skip",
+                idx + 1
+            ),
+            encrypted_shard.checksum().to_bytes()
+        )? {
+            ChecksumResult::Mismatch => {
+                println!("Checksum mismatch. Please re-scan key shard {}.", idx + 1);
+                continue;
+            },
+            ChecksumResult::Skip => {
+                println!("Skipping checksum verification for key shard {}.", idx + 1);
+            },
+            ChecksumResult::Match => {
+                println!("Checksum verified for key shard {}.", idx + 1);
+            },
+        }
 
         let codewords = read_codewords(format!("Enter key shard {} codewords", idx + 1))?;
         let shard = encrypted_shard
@@ -528,20 +565,36 @@ fn reprint(matches: &ArgMatches) -> Result<(), Error> {
         "main-document" => {
             main_document = read_multibase_qr("Enter a main document code")?;
 
-            let pathname = format!("main-document-{}.pdf", main_document.id());
+            let pathname = format!("main_document_reprint-{}.pdf", main_document.id());
             (&mut main_document, pathname)
         }
         "shard" => {
             let encrypted_shard: EncryptedKeyShard = read_multibase("Enter key shard")?;
-            // TODO: Ask the user to input the checksum...
             println!("Key shard checksum: {}", encrypted_shard.checksum_string());
+
+            match cmp_checksum(
+                "Enter the checksum for the key shard, leave empty to skip",
+                encrypted_shard.checksum().to_bytes()
+            )? {
+                ChecksumResult::Mismatch => {
+                    println!("Checksum mismatch. Please re-scan the key shard.");
+                    exit(1);
+                },
+                ChecksumResult::Skip => {
+                    println!("Skipping checksum verification for the key shard.");
+                },
+                ChecksumResult::Match => {
+                    println!("Checksum verified for the key shard.");
+                },
+            }
+
             let codewords = read_codewords("Key shard codewords")?;
 
             let shard = encrypted_shard
                 .decrypt(codewords.clone())
                 .map_err(|err| anyhow!(err)) // TODO: Fix this once FromWire supports non-String errors.
                 .with_context(|| "decrypting shard")?;
-            let pathname = format!("key-shard-{}-{}.pdf", shard.document_id(), shard.id());
+            let pathname = format!("key_shard_reprint-{}-{}.pdf", shard.document_id(), shard.id());
 
             shard_pair = (encrypted_shard, codewords);
             (&mut shard_pair, pathname)
