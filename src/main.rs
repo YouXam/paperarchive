@@ -29,6 +29,7 @@ use anyhow::{anyhow, bail, ensure, Context, Error};
 use clap::{Arg, ArgAction, ArgGroup, ArgMatches, Command};
 
 extern crate paperback_core;
+use multibase::Base;
 use paperback_core::latest as paperback;
 
 use paperback::{
@@ -37,6 +38,8 @@ use paperback::{
 };
 
 use rustyline;
+
+const CHECKSUM_MULTIBASE: multibase::Base = multibase::Base::Base32Z;
 
 // paperback-cli backup [--sealed] -n <QUORUM SIZE> -k <SHARDS> INPUT
 fn backup_cli() -> Command {
@@ -173,6 +176,34 @@ fn read_codewords<S: AsRef<str>>(prompt: S) -> Result<KeyShardCodewords, Error> 
         .collect::<Vec<_>>())
 }
 
+enum ChecksumResult {
+    Mismatch,
+    Skip,
+    Match,
+}
+
+fn cmp_checksum<S: AsRef<str>>(prompt: S, checksum: Vec<u8>) -> Result<ChecksumResult, anyhow::Error> {
+    match wire::multibase_strip(
+        read_multiline::<&str>(prompt.as_ref(), "")
+        .map_err(|err| anyhow!("failed to read checksum: {}", err))?
+    ) {
+        Ok(input_checksum) => {
+            let (_, input_checksum_data): (Base, Vec<u8>) = multibase::decode::<String>(input_checksum)
+                .map_err(|err| anyhow!("failed to decode checksum: {}", err))?;
+            if input_checksum_data != checksum {
+                Ok(ChecksumResult::Mismatch)
+            } else {
+                Ok(ChecksumResult::Match)
+            }
+        },
+        Err(_) => {
+            let checksum_string = multibase::encode(CHECKSUM_MULTIBASE, checksum);
+            println!("\tChecksum: {}", checksum_string);
+            Ok(ChecksumResult::Skip)
+        }
+    }
+}
+
 fn read_multibase_qr<S: AsRef<str>, T: FromWire>(prompt: S) -> Result<T, Error> {
     let prompt = prompt.as_ref();
     let mut joiner = qr::Joiner::new();
@@ -191,10 +222,24 @@ fn read_multibase_qr<S: AsRef<str>, T: FromWire>(prompt: S) -> Result<T, Error> 
         let page = joiner.add_part(part)?;
         let page_number = page.page_number;
         if page.complete() {
-            println!("Page {} checksum: {}",
-                page_number,
-                joiner.checksum_string(page_number)
-            );
+            match cmp_checksum(
+                format!(
+                    "Enter the checksum for page {}, leave empty to skip",
+                    page_number
+                ),
+                joiner.checksum(page_number)
+            )? {
+                ChecksumResult::Mismatch => {
+                    println!("Checksum mismatch. Please re-scan page {}.", page_number);
+                    joiner.remove_page(page_number);
+                },
+                ChecksumResult::Skip => {
+                    println!("Skipping checksum verification for page {}.", page_number);
+                },
+                ChecksumResult::Match => {
+                    println!("Checksum verified for page {}.", page_number);
+                },
+            }
         } else {
             println!("The QR code you just scanned is on page {}. There are {} QR codes left unscanned on this page:",
                 page.page_number, page.remaining());

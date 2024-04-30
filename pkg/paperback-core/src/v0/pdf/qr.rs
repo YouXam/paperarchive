@@ -29,7 +29,6 @@ use unsigned_varint::encode as varuint_encode;
 use multihash_codetable::MultihashDigest;
 
 const CHECKSUM_ALGORITHM: multihash_codetable::Code = multihash_codetable::Code::Blake2b256;
-const CHECKSUM_MULTIBASE: multibase::Base = multibase::Base::Base32Z;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(super) enum PartType {
@@ -303,13 +302,25 @@ impl Joiner {
         Ok(bytes)
     }
 
-    pub fn checksum_string(&self, page_number: usize) -> String {
+    pub fn remove_page(&mut self, page_number: usize) {
+        let page_idx = page_number - 1;
+        for idx in self.pages[page_idx].start_idx..=self.pages[page_idx].end_idx {
+            self.parts[idx] = None;
+        }
+        self.pages[page_idx] = Page::new(
+            page_number,
+            self.pages[page_idx].start_idx,
+            self.pages[page_idx].end_idx,
+        );
+    }
+
+    pub fn checksum(&self, page_number: usize) -> Vec<u8> {
         let page_idx = page_number - 1;
         let mut datas = Vec::new();
         for idx in self.pages[page_idx].start_idx..=self.pages[page_idx].end_idx {
             datas.extend_from_slice(self.parts[idx].as_ref().unwrap().data.as_slice());
         }
-        multibase::encode(CHECKSUM_MULTIBASE, CHECKSUM_ALGORITHM.digest(datas.as_ref()).to_bytes())
+        CHECKSUM_ALGORITHM.digest(datas.as_ref()).to_bytes()
     }
 }
 
